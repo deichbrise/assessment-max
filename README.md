@@ -49,7 +49,7 @@ darum das beste Modell zu finden noch darum eine fertige App zu entwickeln.
 
 Die Aufgabe sollte vollständig in Python gelöst werden. Du kannst aber alle Libraries und Tools Deiner Wahl verwenden.
 Deine vollständige Lösung sollte auf einem separaten Branch eingecheckt sein.
-Stelle einen pull request gegen den master branch, sobald Du fertig bist.
+Stelle einen pull request gegen den 'main' Branch, sobald Du fertig bist.
 
 ## Dokumentation
 
