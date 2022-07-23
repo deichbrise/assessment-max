@@ -52,5 +52,9 @@ Deine vollständige Lösung sollte auf einem separaten Branch eingecheckt sein.
 Stelle einen pull request gegen den 'main' Branch, sobald Du fertig bist.
 
 ## Dokumentation
+### Install
+
+**Requirements**
+* python>=3.8
 
 <your documentation goes here ...>

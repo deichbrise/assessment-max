@@ -1,0 +1,5 @@
+-r requirements.txt
+
+pytest>=7.1.2
+mypy>=0.971
+pre_commit>=2.5.2
