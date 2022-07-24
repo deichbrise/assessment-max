@@ -52,9 +52,23 @@ Deine vollständige Lösung sollte auf einem separaten Branch eingecheckt sein.
 Stelle einen pull request gegen den 'main' Branch, sobald Du fertig bist.
 
 ## Dokumentation
-### Install
-
+### Setup
 **Requirements**
 * python>=3.8
+* pip
 
-<your documentation goes here ...>
+### Development / Training the Model
+
+```bash
+# clone the repo
+
+# Instarll the dev requirements: 
+pip install -r requirements-dev.txt
+
+# get the data.
+# Make sure to place you credential in ~/.kaggle/kaggel.jshon or set the enironment varaibles 
+# For more details see https://github.com/Kaggle/kaggle-api
+kaggle competitions download -c rossmann-store-sales -p data
+# unzip the data
+unzip data/rossmann-store-sales.zip -d data/
+```

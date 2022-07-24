@@ -33,9 +33,9 @@ paths:
             properties:
               DayOfWeek:
                 type: integer
-                description: The day of the week, starting on Monday (0) and ending on Sunday (6)
-                minimum: 0
-                maximum: 6
+                description: The day of the week, starting on Monday (1) and ending on Sunday (7)
+                minimum: 1
+                maximum: 7
               Date:
                 type: string
                 description: The date of the sales prediction
