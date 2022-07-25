@@ -18,4 +18,6 @@ def rmspe(y: np.ndarray, y_pred: np.ndarray) -> float:
     non_zero_sales = y != 0
     y_masked = y[non_zero_sales]
     y_pred_masked = y_pred[non_zero_sales]
-    return np.sqrt((np.mean((y_masked - y_pred_masked) / y_masked) ** 2))
+    score = np.sqrt(np.mean((y_masked - y_pred_masked) / y_masked) ** 2)
+    assert score >= 0.0
+    return score
