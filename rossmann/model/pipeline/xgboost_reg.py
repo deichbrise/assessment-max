@@ -2,25 +2,20 @@ import argparse
 import csv
 from pathlib import Path
 import logging
-from pprint import pformat
 from sklearn.compose import (  # type: ignore
     ColumnTransformer,
-    TransformedTargetRegressor,
 )
-from sklearn.model_selection import GridSearchCV  # type: ignore
+
 from sklearn.preprocessing import (  # type: ignore
-    MinMaxScaler,
-    PowerTransformer,
     OneHotEncoder,
 )  # type: ignore
 from sklearn.compose import make_column_selector
-from sklearn.linear_model import Ridge  # type: ignore
-from sklearn.metrics import make_scorer  # type: ignore
 from sklearn.pipeline import Pipeline  # type: ignore
 
 import pandas as pd
 import numpy as np
 from joblib import dump  # type: ignore
+from xgboost import XGBRegressor  # type: ignore
 
 from rossmann.model.pipeline import make_feature_extractor
 from rossmann.model.metrics import rmspe
@@ -34,10 +29,6 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def to_binary_holidays(categorical_holidays: pd.Series) -> pd.Series:
-    return categorical_holidays != "no holiday"
-
-
 def seed(s: int):
     np.random.seed(s)
 
@@ -46,23 +37,6 @@ def make_feature_transform():
 
     feature_transform = ColumnTransformer(
         [
-            (
-                "unskew",
-                PowerTransformer(),
-                ["CompetitionDistance", "CompetitionOpenSinceDays"],
-            ),
-            (
-                "normnalize",
-                MinMaxScaler(),
-                [
-                    "Day",
-                    "Year",
-                    "Month",
-                    "DayOfYear",
-                    "DayOfWeek",
-                    "DaysSinceStart",
-                ],
-            ),
             (
                 "to_binary",
                 OneVSAllBinarizer(not_target="no holiday"),
@@ -108,16 +82,10 @@ def make_pipeline(prepared_stores: pd.DataFrame) -> Pipeline:
         [
             ("feature_extractor", feature_extractor),
             ("feature_transform", feature_transform),
-            (
-                "regressor",
-                Ridge(),
-            ),
+            ("regressor", XGBRegressor(eval_metric=rmspe)),
         ]
     )
-    target_transform = TransformedTargetRegressor(
-        pipeline, transformer=PowerTransformer()
-    )
-    return target_transform
+    return pipeline
 
 
 def train(
@@ -134,26 +102,10 @@ def train(
         Pipeline: _description_
     """
     logger.info(f"Training pipeline on {len(X_train)} instances...")
-
     pipeline = make_pipeline(prepared_stores)
-    params = {
-        "regressor__regressor__alpha": [
-            0.1,
-            1,
-            10,
-        ],
-    }
-    rmspe_scorer = make_scorer(rmspe, greater_is_better=False)
-    pipeline = GridSearchCV(
-        pipeline,
-        params,
-        cv=5,
-        scoring=rmspe_scorer,
-    )
-    pipeline = pipeline.fit(X_train, y_train)
 
+    pipeline = pipeline.fit(X_train, y_train)
     logger.info("Training pipeline done.")
-    logger.info(pformat(pipeline.cv_results_))
     return pipeline
 
 
@@ -172,7 +124,7 @@ def main(args: argparse.Namespace):
     seed(args.seed)
 
     data_path = args.path
-    out_path = data_path / "models" / f"ridge_{args.seed}"
+    out_path = data_path / "models" / f"xgboost_{args.seed}"
     logger.info(f"Saving models/predictions/scores to {out_path}")
     try:
         out_path.mkdir(parents=True, exist_ok=False)
@@ -182,7 +134,7 @@ def main(args: argparse.Namespace):
     train_data = load_instances_csv(data_path / "train.csv")
     train_data = train_data.drop(columns=["Customers"])
     subset_train = TopStoreSelector(top_percent=0.1).fit_transform(train_data)
-    # ssubset_train = train_data.sample(49742)
+    # subset_train = train_data.sample(49742)
     assert subset_train.notna().all().all()
 
     X_train, y_train = (

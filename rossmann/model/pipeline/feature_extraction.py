@@ -1,7 +1,27 @@
-from sklearn.base import TransformerMixin  # type: ignore
+from sklearn.base import TransformerMixin, BaseEstimator  # type: ignore
 import pandas as pd
 from rossmann.model.pipeline.execeptions import StoreNotFoundException
-from typing import List, Text, cast
+from typing import Any, List, Text, cast
+
+
+class OneVSAllBinarizer(TransformerMixin, BaseEstimator):
+    def __init__(self, target: Any = None, not_target: Any = None) -> None:
+        super().__init__()
+        if (target is None and not_target is None) or (
+            target is not None and not_target is not None
+        ):
+            raise ValueError("Either target or not_target must be specified")
+        self.target = target
+        self.not_target = not_target
+
+    def fit(self, X: pd.DataFrame, y=None):
+        return self
+
+    def transform(self, X: pd.Series, y=None) -> pd.Series:
+        if self.target is not None:
+            return (X == self.target).astype(int)
+        else:
+            return (X != self.not_target).astype(int)
 
 
 class DateEncoder(TransformerMixin):

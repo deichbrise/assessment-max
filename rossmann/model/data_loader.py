@@ -2,6 +2,8 @@ from typing import List, Text
 import pandas as pd
 from pathlib import Path
 
+from sklearn.compose import make_column_selector  # type: ignore
+
 state_holiday_name_map = {
     "a": "public",
     "b": "Easter holiday",
@@ -39,6 +41,13 @@ months = [
 ]
 
 
+def boolean2bool(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Convert all boolean columns to bool type."""
+    columns = make_column_selector(dtype_include="boolean")(dataframe)
+    dataframe[columns] = dataframe[columns].astype(bool)
+    return dataframe
+
+
 def load_instances_csv(file_path: Path) -> pd.DataFrame:
     """Loads the instances (train or test) csv file.
 
@@ -71,7 +80,7 @@ def load_instances_csv(file_path: Path) -> pd.DataFrame:
     cats = instances["StateHoliday"].cat
     instances["StateHoliday"] = cats.rename_categories(state_holiday_name_map)
 
-    return instances
+    return boolean2bool(instances)
 
 
 def load_stores_csv(file_path: Path) -> pd.DataFrame:
@@ -160,6 +169,8 @@ def load_stores_csv(file_path: Path) -> pd.DataFrame:
         .str.split(",")
         .apply(month_str2list)
     )
+
+    stores = boolean2bool(stores)
     return stores
 
 
