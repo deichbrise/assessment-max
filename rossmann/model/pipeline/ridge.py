@@ -19,27 +19,19 @@ from sklearn.metrics import make_scorer  # type: ignore
 from sklearn.pipeline import Pipeline  # type: ignore
 
 import pandas as pd
-import numpy as np
 from joblib import dump  # type: ignore
 
 from rossmann.model.pipeline import make_feature_extractor
 from rossmann.model.metrics import rmspe
 from rossmann.model.data_loader import load_instances_csv, load_stores_csv
 from rossmann.model.pipeline.feature_extraction import OneVSAllBinarizer
+from rossmann.model.pipeline.train_utils import predict, seed
 from rossmann.model.prepare_data import prepare_stores
 from rossmann.model.pipeline.filter import TopStoreSelector
 
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
-
-def to_binary_holidays(categorical_holidays: pd.Series) -> pd.Series:
-    return categorical_holidays != "no holiday"
-
-
-def seed(s: int):
-    np.random.seed(s)
 
 
 def make_feature_transform():
@@ -155,16 +147,6 @@ def train(
     logger.info("Training pipeline done.")
     logger.info(pformat(pipeline.cv_results_))
     return pipeline
-
-
-def predict(pipeline: Pipeline, X_test: pd.DataFrame) -> pd.Series:
-    predictions = pipeline.predict(X_test)
-
-    return (
-        pd.Series(data=predictions, index=X_test.index, name="Sales")
-        .round()
-        .astype(int)
-    )
 
 
 def main(args: argparse.Namespace):

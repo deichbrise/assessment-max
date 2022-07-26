@@ -6,7 +6,6 @@ import pandas as pd
 from sklearn.pipeline import Pipeline  # type: ignore
 
 from rossmann.server.model.store import Store, PredictedStore
-from rossmann.model.pipeline.ridge import to_binary_holidays  # noqa: F401
 
 
 class StorePredictor:

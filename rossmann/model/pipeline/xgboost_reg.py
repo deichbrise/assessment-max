@@ -4,16 +4,17 @@ from pathlib import Path
 import logging
 from sklearn.compose import (  # type: ignore
     ColumnTransformer,
+    TransformedTargetRegressor,
 )
 
 from sklearn.preprocessing import (  # type: ignore
     OneHotEncoder,
+    PowerTransformer,
 )  # type: ignore
 from sklearn.compose import make_column_selector
 from sklearn.pipeline import Pipeline  # type: ignore
 
 import pandas as pd
-import numpy as np
 from joblib import dump  # type: ignore
 from xgboost import XGBRegressor  # type: ignore
 
@@ -21,16 +22,13 @@ from rossmann.model.pipeline import make_feature_extractor
 from rossmann.model.metrics import rmspe
 from rossmann.model.data_loader import load_instances_csv, load_stores_csv
 from rossmann.model.pipeline.feature_extraction import OneVSAllBinarizer
+from rossmann.model.pipeline.train_utils import predict, seed
 from rossmann.model.prepare_data import prepare_stores
 from rossmann.model.pipeline.filter import TopStoreSelector
 
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
-
-def seed(s: int):
-    np.random.seed(s)
 
 
 def make_feature_transform():
@@ -85,7 +83,11 @@ def make_pipeline(prepared_stores: pd.DataFrame) -> Pipeline:
             ("regressor", XGBRegressor(eval_metric=rmspe)),
         ]
     )
-    return pipeline
+
+    target_transform = TransformedTargetRegressor(
+        pipeline, transformer=PowerTransformer()
+    )
+    return target_transform
 
 
 def train(
@@ -107,16 +109,6 @@ def train(
     pipeline = pipeline.fit(X_train, y_train)
     logger.info("Training pipeline done.")
     return pipeline
-
-
-def predict(pipeline: Pipeline, X_test: pd.DataFrame) -> pd.Series:
-    predictions = pipeline.predict(X_test)
-
-    return (
-        pd.Series(data=predictions, index=X_test.index, name="Sales")
-        .round()
-        .astype(int)
-    )
 
 
 def main(args: argparse.Namespace):
@@ -188,15 +180,12 @@ def main(args: argparse.Namespace):
 
 
 def parse_args() -> argparse.Namespace:
-    # todo add help text
     parser = argparse.ArgumentParser(
-        """Train a Ridge regression model.
+        """Train a xgboost regression model.
     1. Feature extraction pipeline: lookup from stores and extract date
         features.
-    2. Feature transformation pipeline: transform features: normalize,
-        log, etc.
-    3. Regression pipeline: train a Ridge regression model.
-    4. CrossValidation to find alpha  for the Ridge regression model."""
+    2. Feature transformation pipeline:  to dummy  binary features.
+    3. Regression pipeline: train a xgboost regression model."""
     )
     parser.add_argument("path", type=Path)
     parser.add_argument("--seed", type=int, default=42)

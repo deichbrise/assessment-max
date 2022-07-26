@@ -4,9 +4,6 @@ from jsonschema import draft4_format_checker  # type: ignore
 from datetime import datetime
 from rossmann.server.model.predictor import StorePredictor  # type: ignore
 
-# needed for the deserialization of the model
-from rossmann.model.pipeline.ridge import to_binary_holidays  # noqa: F401
-
 
 @draft4_format_checker.checks("date")
 def is_custom_date(val: str) -> bool:
