@@ -1,9 +1,11 @@
 import pytest
-from rossmann.server.server import create_app
+from rossmann.server.app import create_app
 
 
 @pytest.fixture(scope="session")
 def app():
+    from rossmann.model.pipeline.ridge import to_binary_holidays  # noqa: F401
+
     return create_app()
 
 

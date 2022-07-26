@@ -30,6 +30,7 @@ paths:
           required: True
           schema:
             type: object
+            required: [DayOfWeek, Date, Open, Promo, StateHoliday, SchoolHoliday]
             properties:
               DayOfWeek:
                 type: integer
@@ -52,6 +53,8 @@ paths:
               SchoolHoliday:
                 type: boolean
                 description: If that day is a school holiday at the location of the store
+         
+  
       responses:
         200:
           description: Successfully predicted the sales of the store

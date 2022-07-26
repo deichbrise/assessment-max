@@ -14,13 +14,13 @@ assortment_name_map = {"a": "basic", "b": "extra", "c": "extended"}
 data_columns = ["Date"]
 
 columns_types = {
-    "Open": "bool",
-    "Promo": "bool",
-    "SchoolHoliday": "bool",
+    "Open": "boolean",
+    "Promo": "boolean",
+    "SchoolHoliday": "boolean",
     "StateHoliday": "category",
     "StoreType": "category",
     "Assortment": "category",
-    "Promo2": "bool",
+    "Promo2": "boolean",
 }
 
 months = [
@@ -59,11 +59,6 @@ def load_instances_csv(file_path: Path) -> pd.DataFrame:
             * Promo (bool)
             * StateHoliday (category)
             * SchoolHoliday (bool)
-            * Day (int64)
-            * Year (int64)
-            * Month (int64)
-            * DayOfYear (int64)
-            * DaysSinceStart (int64)
     """
     instances = pd.read_csv(
         file_path,
@@ -72,8 +67,10 @@ def load_instances_csv(file_path: Path) -> pd.DataFrame:
         dtype=columns_types,  # type: ignore
     )
 
+    instances["Open"].fillna(value=True, inplace=True)
     cats = instances["StateHoliday"].cat
     instances["StateHoliday"] = cats.rename_categories(state_holiday_name_map)
+
     return instances
 
 

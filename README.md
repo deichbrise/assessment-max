@@ -71,4 +71,9 @@ pip install -r requirements-dev.txt
 kaggle competitions download -c rossmann-store-sales -p data
 # unzip the data
 unzip data/rossmann-store-sales.zip -d data/
+# train the model 
+python -m rossmann.model.pipeline.ridge data --seed 42
+# run the (devleopment) server 
+python -m rossmann.server.app
+# open http://127.0.0.1:5000/sales/ui/ to tes
 ```

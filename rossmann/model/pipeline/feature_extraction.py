@@ -29,6 +29,8 @@ class DateEncoder(TransformerMixin):
 
 
 class Promo2Extractor(TransformerMixin):
+    """Extract if the store is participating in the promo2 at a certain day"""
+
     KEEP_COLUMNS = ["Promo2", "PromoInterval", "Promo2Since"]
 
     def __init__(self, stores: pd.DataFrame) -> None:
@@ -58,6 +60,8 @@ class Promo2Extractor(TransformerMixin):
 
 
 class DaySinceCompetitionOpenedExtractor(TransformerMixin):
+    """Calculated the number of days since the competition was opened"""
+
     KEEP_COLUMNS = ["CompetitionOpenSince"]
 
     def __init__(self, stores: pd.DataFrame) -> None:
@@ -89,6 +93,8 @@ class DaySinceCompetitionOpenedExtractor(TransformerMixin):
 
 
 class DataFrameFeatureExtractor(TransformerMixin):
+    """Looks up features in another dataframe"""
+
     def __init__(
         self, stores: pd.DataFrame, features: List[Text], id: Text
     ) -> None:

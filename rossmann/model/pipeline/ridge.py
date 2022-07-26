@@ -1,34 +1,68 @@
 import argparse
+import csv
 from pathlib import Path
-from sklearn.compose import ColumnTransformer  # type: ignore
+import logging
+from pprint import pformat
+from sklearn.compose import (  # type: ignore
+    ColumnTransformer,
+    TransformedTargetRegressor,
+)
+from sklearn.model_selection import GridSearchCV  # type: ignore
 from sklearn.preprocessing import (  # type: ignore
+    MinMaxScaler,
     PowerTransformer,
     OneHotEncoder,
     FunctionTransformer,
 )  # type: ignore
 from sklearn.compose import make_column_selector
-from rossmann.model.metrics import rmspe
-from sklearn.linear_model import RidgeCV  # type: ignore
+from sklearn.linear_model import Ridge  # type: ignore
 from sklearn.metrics import make_scorer  # type: ignore
 from sklearn.pipeline import Pipeline  # type: ignore
+
 import pandas as pd
+import numpy as np
+from joblib import dump  # type: ignore
 
 from rossmann.model.pipeline import make_feature_extractor
-from joblib import dump  # type: ignore
+from rossmann.model.metrics import rmspe
 from rossmann.model.data_loader import load_instances_csv, load_stores_csv
 from rossmann.model.prepare_data import prepare_stores
 from rossmann.model.pipeline.filter import TopStoreSelector
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 def to_binary_holidays(categorical_holidays: pd.Series) -> pd.Series:
     return categorical_holidays != "no holiday"
 
 
+def seed(s: int):
+    np.random.seed(s)
+
+
 def make_feature_transform():
 
     feature_transform = ColumnTransformer(
         [
-            ("unskew", PowerTransformer(), ["CompetitionDistance"]),
+            (
+                "unskew",
+                PowerTransformer(),
+                ["CompetitionDistance", "CompetitionOpenSinceDays"],
+            ),
+            (
+                "normnalize",
+                MinMaxScaler(),
+                [
+                    "Day",
+                    "Year",
+                    "Month",
+                    "DayOfYear",
+                    "DayOfWeek",
+                    "DaysSinceStart",
+                ],
+            ),
             (
                 "to_binary",
                 FunctionTransformer(to_binary_holidays),
@@ -59,7 +93,6 @@ def make_feature_transform():
                 ),
                 ["HolidayGroup"],
             ),
-            ("drop_binary", "drop", ["Customers"]),
         ],
         remainder="passthrough",
     )
@@ -71,53 +104,153 @@ def make_pipeline(prepared_stores: pd.DataFrame) -> Pipeline:
     feature_transform = make_feature_transform()
     # score get a negative sign  due to minimization behaviour
     # https://stackoverflow.com/a/27323356/3411517
-    rmspe_scorer = make_scorer(rmspe, greater_is_better=False)
     pipeline = Pipeline(
         [
             ("feature_extractor", feature_extractor),
             ("feature_transform", feature_transform),
             (
                 "regressor",
-                RidgeCV(scoring=rmspe_scorer, cv=5, alphas=[0.1, 1.0, 10.0]),
+                Ridge(),
             ),
         ]
     )
+    target_transform = TransformedTargetRegressor(
+        pipeline, transformer=PowerTransformer()
+    )
+    return target_transform
 
+
+def train(
+    X_train: pd.DataFrame, y_train: pd.DataFrame, prepared_stores: pd.DataFrame
+) -> Pipeline:
+    """Trains a Ridge regression model and pipeline with the given data.
+
+    Args:
+        X_train (pd.DataFrame): _description_
+        y_train (pd.DataFrame): _description_
+        prepared_stores (pd.DataFrame): _description_
+
+    Returns:
+        Pipeline: _description_
+    """
+    logger.info(f"Training pipeline on {len(X_train)} instances...")
+
+    pipeline = make_pipeline(prepared_stores)
+    params = {
+        "regressor__regressor__alpha": [
+            0.1,
+            1,
+            10,
+        ],
+    }
+    rmspe_scorer = make_scorer(rmspe, greater_is_better=False)
+    pipeline = GridSearchCV(
+        pipeline,
+        params,
+        cv=5,
+        scoring=rmspe_scorer,
+    )
+    pipeline = pipeline.fit(X_train, y_train)
+
+    logger.info("Training pipeline done.")
+    logger.info(pformat(pipeline.cv_results_))
     return pipeline
 
 
-def train(data_path: Path) -> Pipeline:
-    # todo split into train and main
-    # todo report progress / scores
+def predict(pipeline: Pipeline, X_test: pd.DataFrame) -> pd.Series:
+    predictions = pipeline.predict(X_test)
 
-    train = load_instances_csv(data_path / "train.csv")
-    subset_train = TopStoreSelector(top_percent=0.1).fit_transform(train)
+    return (
+        pd.Series(data=predictions, index=X_test.index, name="Sales")
+        .round()
+        .astype(int)
+    )
+
+
+def main(args: argparse.Namespace):
+    logger.info(f"Running training with {args}")
+    seed(args.seed)
+
+    data_path = args.path
+    out_path = data_path / "models" / f"ridge_{args.seed}"
+    logger.info(f"Saving models/predictions/scores to {out_path}")
+    try:
+        out_path.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        logger.warning(f"{out_path} already exists. Overwriting old results.")
+
+    train_data = load_instances_csv(data_path / "train.csv")
+    train_data = train_data.drop(columns=["Customers"])
+    subset_train = TopStoreSelector(top_percent=0.1).fit_transform(train_data)
+    # ssubset_train = train_data.sample(49742)
     assert subset_train.notna().all().all()
+
     X_train, y_train = (
         subset_train.drop(columns=["Sales"]),
         subset_train["Sales"],
     )
 
     stores = load_stores_csv(data_path / "store.csv")
-    prepared_stores = prepare_stores(train, stores)
-
+    prepared_stores = prepare_stores(train_data, stores)
     # Promo2Since is NaTa if Promo2 False.
     # That is ok, since this is only for lookup if Promo2 is True.
     assert prepared_stores.drop("Promo2Since", axis=1).notna().all().all()
 
-    pipeline = make_pipeline(prepared_stores)
-    pipeline = pipeline.fit(X_train, y_train)
+    pipeline = train(X_train, y_train, prepared_stores)
 
-    dump(pipeline, data_path / "ridge_model.pkl")
+    train_data["IncludedInTraining"] = False
+    train_data.loc[subset_train.index, "IncludedInTraining"] = True
+
+    train_data_sampled = train_data.groupby("IncludedInTraining").sample(
+        len(X_train)
+    )
+    logger.info(
+        f"Evaluating on (sampled) train data (# {len(train_data_sampled)})"
+    )
+    y_train_pred = predict(pipeline, train_data_sampled)
+    y_train_pred.name = "PredictedSales"
+    train_data_sampled_pred = train_data_sampled.join(y_train_pred)
+    scores = train_data_sampled_pred.groupby("IncludedInTraining").apply(
+        lambda group: rmspe(group["Sales"], group["PredictedSales"])
+    )
+
+    logger.info(f"RMSPE on train data: {scores}")
+
+    scores.to_csv(out_path / "training_scores.csv")
+    train_data_sampled_pred.to_csv(out_path / "train_sampled_prediction.csv")
+
+    dump(pipeline, out_path / "pipeline.pkl")
+
+    X_test = load_instances_csv(data_path / "test.csv")
+
+    assert X_test.notna().all().all()
+
+    logger.info("Predicting on test data...")
+    y_test_pred = predict(pipeline, X_test.drop(columns="Id"))
+    y_test_pred_with_id = X_test[["Id"]].join(y_test_pred)
+    y_test_pred_with_id.to_csv(
+        out_path / "test_predictions.csv",
+        index=False,
+        quoting=csv.QUOTE_NONNUMERIC,
+    )
 
 
 def parse_args() -> argparse.Namespace:
     # todo add help text
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        """Train a Ridge regression model.
+    1. Feature extraction pipeline: lookup from stores and extract date
+        features.
+    2. Feature transformation pipeline: transform features: normalize,
+        log, etc.
+    3. Regression pipeline: train a Ridge regression model.
+    4. CrossValidation to find alpha  for the Ridge regression model."""
+    )
     parser.add_argument("path", type=Path)
+    parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    pipeline = train(args.path)
+    main(args)
