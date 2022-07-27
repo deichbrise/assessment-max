@@ -1,15 +1,14 @@
 import argparse
-import csv
 from pathlib import Path
 import logging
 from sklearn.compose import (  # type: ignore
     ColumnTransformer,
-    TransformedTargetRegressor,
 )
+from sklearn.metrics import make_scorer, r2_score  # type: ignore
+from sklearn.model_selection import cross_val_score  # type: ignore
 
 from sklearn.preprocessing import (  # type: ignore
     OneHotEncoder,
-    PowerTransformer,
 )  # type: ignore
 from sklearn.compose import make_column_selector
 from sklearn.pipeline import Pipeline  # type: ignore
@@ -22,7 +21,12 @@ from rossmann.model.pipeline import make_feature_extractor
 from rossmann.model.metrics import rmspe
 from rossmann.model.data_loader import load_instances_csv, load_stores_csv
 from rossmann.model.pipeline.feature_extraction import OneVSAllBinarizer
-from rossmann.model.pipeline.train_utils import predict, seed
+from rossmann.model.pipeline.train_utils import (
+    evaluate,
+    predict,
+    seed,
+    write_kaggle_evaluation_file,
+)
 from rossmann.model.prepare_data import prepare_stores
 from rossmann.model.pipeline.filter import TopStoreSelector
 
@@ -83,11 +87,7 @@ def make_pipeline(prepared_stores: pd.DataFrame) -> Pipeline:
             ("regressor", XGBRegressor(eval_metric=rmspe)),
         ]
     )
-
-    target_transform = TransformedTargetRegressor(
-        pipeline, transformer=PowerTransformer()
-    )
-    return target_transform
+    return pipeline
 
 
 def train(
@@ -105,6 +105,18 @@ def train(
     """
     logger.info(f"Training pipeline on {len(X_train)} instances...")
     pipeline = make_pipeline(prepared_stores)
+
+    scores = cross_val_score(
+        pipeline,
+        X_train,
+        y_train,
+        cv=3,
+        scoring=make_scorer(
+            rmspe,
+        ),
+    )
+
+    logger.info(f"Pre training cv (3) results in rmspe {scores}")
 
     pipeline = pipeline.fit(X_train, y_train)
     logger.info("Training pipeline done.")
@@ -142,26 +154,20 @@ def main(args: argparse.Namespace):
 
     pipeline = train(X_train, y_train, prepared_stores)
 
-    train_data["IncludedInTraining"] = False
-    train_data.loc[subset_train.index, "IncludedInTraining"] = True
+    logger.info("Evaluating pipeline...")
+    eval_data = {
+        "train": subset_train,
+        "train_not_included": train_data.drop(subset_train.index).sample(
+            len(subset_train)
+        ),
+    }
 
-    train_data_sampled = train_data.groupby("IncludedInTraining").sample(
-        len(X_train)
+    scores = evaluate(
+        pipeline,
+        eval_data,
+        metrics={"rmspe": rmspe, "r2": r2_score},
     )
-    logger.info(
-        f"Evaluating on (sampled) train data (# {len(train_data_sampled)})"
-    )
-    y_train_pred = predict(pipeline, train_data_sampled)
-    y_train_pred.name = "PredictedSales"
-    train_data_sampled_pred = train_data_sampled.join(y_train_pred)
-    scores = train_data_sampled_pred.groupby("IncludedInTraining").apply(
-        lambda group: rmspe(group["Sales"], group["PredictedSales"])
-    )
-
-    logger.info(f"RMSPE on train data: {scores}")
-
-    scores.to_csv(out_path / "training_scores.csv")
-    train_data_sampled_pred.to_csv(out_path / "train_sampled_prediction.csv")
+    logger.info(scores)
 
     dump(pipeline, out_path / "pipeline.pkl")
 
@@ -170,13 +176,9 @@ def main(args: argparse.Namespace):
     assert X_test.notna().all().all()
 
     logger.info("Predicting on test data...")
-    y_test_pred = predict(pipeline, X_test.drop(columns="Id"))
-    y_test_pred_with_id = X_test[["Id"]].join(y_test_pred)
-    y_test_pred_with_id.to_csv(
-        out_path / "test_predictions.csv",
-        index=False,
-        quoting=csv.QUOTE_NONNUMERIC,
-    )
+    X_test_predicted = predict(pipeline, X_test.drop(columns=["Id"]))
+
+    write_kaggle_evaluation_file(out_path, X_test_predicted, X_test["Id"])
 
 
 def parse_args() -> argparse.Namespace:
