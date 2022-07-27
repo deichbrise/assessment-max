@@ -6,7 +6,11 @@ from sklearn.compose import (  # type: ignore
     ColumnTransformer,
     TransformedTargetRegressor,
 )
-from sklearn.model_selection import GridSearchCV  # type: ignore
+from sklearn.model_selection import (  # type: ignore
+    GridSearchCV,
+    train_test_split,
+)
+
 from sklearn.preprocessing import (  # type: ignore
     MinMaxScaler,
     PowerTransformer,
@@ -167,19 +171,20 @@ def main(args: argparse.Namespace):
     except FileExistsError:
         logger.warning(f"{out_path} already exists. Overwriting old results.")
 
-    train_data = load_instances_csv(data_path / "train.csv")
-    train_data = train_data.drop(columns=["Customers"])
-    subset_train = TopStoreSelector(top_percent=0.1).fit_transform(train_data)
-    # ssubset_train = train_data.sample(49742)
-    assert subset_train.notna().all().all()
-
+    data = load_instances_csv(data_path / "train.csv")
+    data = data.drop(columns=["Customers"])
+    subset_top = TopStoreSelector(top_percent=0.1).fit_transform(data)
+    assert subset_top.notna().all().all()
+    train_data, eval_data = train_test_split(
+        subset_top, test_size=0.1, random_state=args.seed
+    )
     X_train, y_train = (
-        subset_train.drop(columns=["Sales"]),
-        subset_train["Sales"],
+        train_data.drop(columns=["Sales"]),
+        train_data["Sales"],
     )
 
     stores = load_stores_csv(data_path / "store.csv")
-    prepared_stores = prepare_stores(train_data, stores)
+    prepared_stores = prepare_stores(data, stores)
     # Promo2Since is NaTa if Promo2 False.
     # That is ok, since this is only for lookup if Promo2 is True.
     assert prepared_stores.drop("Promo2Since", axis=1).notna().all().all()
@@ -187,19 +192,14 @@ def main(args: argparse.Namespace):
     pipeline = train(X_train, y_train, prepared_stores)
 
     logger.info("Evaluating pipeline...")
-    eval_data = {
-        "train": subset_train,
-        "train_not_included": train_data.drop(subset_train.index).sample(
-            len(subset_train)
-        ),
-    }
+    eval_data = {"train": train_data, "eval": eval_data}
 
     scores = evaluate(
         pipeline,
         eval_data,
         metrics={"rmspe": rmspe, "r2": r2_score},
     )
-    logger.info(scores)
+    logger.info(pformat(scores))
 
     dump(pipeline, out_path / "pipeline.pkl")
 
@@ -209,6 +209,7 @@ def main(args: argparse.Namespace):
 
     logger.info("Predicting on test data...")
     X_test_predicted = predict(pipeline, X_test.drop(columns=["Id"]))
+
     write_kaggle_evaluation_file(out_path, X_test_predicted, X_test["Id"])
 
 
