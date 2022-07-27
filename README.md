@@ -95,7 +95,7 @@ python -m rossmann.server.app
 
 Instead of training an  xgboost you can also train a ridge regressor pipline using: 
 ```
-python -m rossmann.model.pipeline.xgboost_reg data --seed 42
+python -m rossmann.model.pipeline.ridge data --seed 42
 ```
 
 In order to switch the model used by the server change the `rossmann/server/config/default.py` to 
@@ -121,7 +121,7 @@ To run the
 
 | Regressor |  Split | rmspe |   r2  |
 |:---------:|:------:|:-----:|:-----:|
-|  XGNBoost |  train | 0.009 | 0.973 |
-|  XGNBoost |  eval  | 0.006 | 0.968 |
+|  XGBoost |  train | 0.009 | 0.973 |
+|  XGBoost |  eval  | 0.006 | 0.968 |
 |   Rdige   |  train | 0.054 | 0.711 |
-|  XGNBoost |   eval | 0.051 | 0.721 |
+|  Rdige |   eval | 0.051 | 0.721 |

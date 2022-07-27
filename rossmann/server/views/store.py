@@ -14,7 +14,7 @@ def post(storeId: int, metadata: Dict[Text, Union[Text, int, bool]]):
         predicted_store = current_app.config["predictor"].predict(store)
         return asdict(predicted_store)
     except StoreNotFoundException as e:
-        (
+        return (
             f"Store storeId: {e.store} not found",
             404,
         )

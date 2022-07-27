@@ -18,3 +18,7 @@ def test_post_store(client):
 
     assert json_response["Store"] == store_id
     assert json_response["Date"] == request["Date"]
+
+    invalid_store_id = -1
+    response = client.post(f"/sales/store/{invalid_store_id}", json=request)
+    assert response.status_code == 404
