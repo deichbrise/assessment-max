@@ -1,0 +1,15 @@
+-r requirements.txt
+
+# tool chain
+pytest>=7.1.2
+mypy>=0.971
+pre_commit>=2.5.2
+
+# typing stubs
+sklearn-stub>=0.0.3
+pandas-stubs>=1.4.3
+
+# data sciene development tools
+seaborn>=0.11.2
+notebook>=6.4.12
+kaggle>=1.5.

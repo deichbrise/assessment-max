@@ -1,0 +1,7 @@
+connexion[swagger-ui]>=2.14.0
+
+
+pandas>=1.4.3 
+scikit-learn>=1.1.1
+pyarrow>=8.0.0
+xgboost>=1.6.1

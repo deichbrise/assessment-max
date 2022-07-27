@@ -53,4 +53,75 @@ Stelle einen pull request gegen den 'main' Branch, sobald Du fertig bist.
 
 ## Dokumentation
 
-<your documentation goes here ...>
+### Repo Structure: 
+```
+├── README.md
+├── conftest.py
+├── data                   # contain the data and trained models
+├── pyproject.toml
+├── pytest.ini
+├── requirements-dev.txt   # dev only dependencies, also installs requirements.txt
+├── requirements.txt       # production only only
+├── rossmann               # the actual softwre package
+│   ├── model              # model and training code
+│   └── server             # server definition
+└── tests                  # Some tests
+```
+
+### Setup
+**Requirements**
+* python>=3.8
+
+
+### Development / Training the Model
+
+```bash
+# Instarll the dev requirements: 
+pip install -r requirements-dev.txt
+
+pre-commit install 
+# get the data.
+# Make sure to place you credential in ~/.kaggle/kaggel.jshon or set the enironment varaibles 
+# For more details see https://github.com/Kaggle/kaggle-api
+kaggle competitions download -c rossmann-store-sales -p data
+# unzip the data
+unzip data/rossmann-store-sales.zip -d data/
+# train the model 
+python -m rossmann.model.pipeline.xgboost_reg data --seed 42
+# run the (devleopment) server 
+python -m rossmann.server.app
+# open http://127.0.0.1:5000/sales/ui/ to the REST doc and swagger
+```
+
+Instead of training an  xgboost you can also train a ridge regressor pipline using: 
+```
+python -m rossmann.model.pipeline.ridge data --seed 42
+```
+
+In order to switch the model used by the server change the `rossmann/server/config/default.py` to 
+```python
+MODEL_PATH = "data/models/rdige_42/pipeline.pkl"
+```
+
+The general pattern is: `data/models/[ridge|xgboost]_[seed]/pipeline.pkl`
+
+
+### Models / EDA
+The have a look at the EDA and more details about the two implmented piplines have a look at the notbooks: 
+
+* rossmann/model/EDA.ipynb
+* rossmann/model/piplines.ipynb
+
+respectively.
+
+To run the 
+
+
+### Training/Evaluation Results
+
+| Regressor |  Split | rmspe |   r2  |
+|:---------:|:------:|:-----:|:-----:|
+|  XGBoost |  train | 0.009 | 0.973 |
+|  XGBoost |  eval  | 0.006 | 0.968 |
+|   Rdige   |  train | 0.054 | 0.711 |
+|  Rdige |   eval | 0.051 | 0.721 |

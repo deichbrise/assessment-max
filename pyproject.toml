@@ -1,0 +1,6 @@
+[tool.black]
+line-length = 81
+target-version = ['py38']
+
+[tool.pydocstyle]
+convention = 'google'

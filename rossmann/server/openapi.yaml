@@ -1,0 +1,76 @@
+swagger: "2.0"
+info:
+  description: This API serve a model to predict the sales of a rossmann store.
+  version: "1.0.0"
+  title: Rossmann Store Sales Prediction API
+consumes:
+  - application/json
+produces:
+  - application/json
+
+basePath: /sales
+
+paths:
+  /store/{storeId}:
+    post:
+      operationId: rossmann.server.views.store.post
+      tags:
+        - Store
+      summary: Gets the sales prediction of a store
+      description: Gets the sales prediction of a store
+      parameters:
+        - name: storeId
+          in: path
+          description: The store id
+          type: integer
+          required: true
+        - name: metadata
+          in: body
+          description: Metadata of the store
+          required: True
+          schema:
+            type: object
+            required: [DayOfWeek, Date, Open, Promo, StateHoliday, SchoolHoliday]
+            properties:
+              DayOfWeek:
+                type: integer
+                description: The day of the week, starting on Monday (1) and ending on Sunday (7)
+                minimum: 1
+                maximum: 7
+                example: 1
+              Date:
+                type: string
+                description: The date of the sales prediction
+                format: date
+              Open:
+                type: boolean
+                description: If the store is open on that day
+              Promo:
+                type: boolean
+                description: If the store is on a promotion on that day
+              StateHoliday:
+                type: boolean
+                description: If that day is a state holiday at the location of the store
+              SchoolHoliday:
+                type: boolean
+                description: If that day is a school holiday at the location of the store
+         
+  
+      responses:
+        200:
+          description: Successfully predicted the sales of the store
+          schema:
+            type: object
+            properties:
+              Store:
+                type: integer
+                description: The store id
+              Date:
+                type: string
+                description: The date of the sales prediction
+                format: date
+              PredictedSales:
+                type: integer
+                description: the predicted sales of the store at that day
+        404:
+          description: The store id does not exist

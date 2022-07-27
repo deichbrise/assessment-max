@@ -1,0 +1,129 @@
+from sklearn.base import TransformerMixin, BaseEstimator  # type: ignore
+import pandas as pd
+from rossmann.model.pipeline.execeptions import StoreNotFoundException
+from typing import Any, List, Text, cast
+
+
+class OneVSAllBinarizer(TransformerMixin, BaseEstimator):
+    def __init__(self, target: Any = None, not_target: Any = None) -> None:
+        super().__init__()
+        if (target is None and not_target is None) or (
+            target is not None and not_target is not None
+        ):
+            raise ValueError("Either target or not_target must be specified")
+        self.target = target
+        self.not_target = not_target
+
+    def fit(self, X: pd.DataFrame, y=None):
+        return self
+
+    def transform(self, X: pd.Series, y=None) -> pd.Series:
+        if self.target is not None:
+            return (X == self.target).astype(int)
+        else:
+            return (X != self.not_target).astype(int)
+
+
+class DateEncoder(TransformerMixin):
+    """Extracts time features from the index Date
+
+    Expects a DataFrame with a datatimeindex Date
+
+    """
+
+    def fit(self, X: pd.DataFrame, y=None):
+        self.start_data = min(X.index.get_level_values("Date"))
+        return self
+
+    def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
+        date: pd.DatetimeIndex = cast(
+            pd.DatetimeIndex, X.index.get_level_values("Date")
+        )
+        return X.assign(
+            Day=date.day,  # type: ignore
+            Year=date.year,  # type: ignore
+            Month=date.month,  # type: ignore
+            DayOfYear=date.dayofyear,  # type: ignore
+            DaysSinceStart=(date - self.start_data).days,
+        )
+
+
+class Promo2Extractor(TransformerMixin):
+    """Extract if the store is participating in the promo2 at a certain day"""
+
+    KEEP_COLUMNS = ["Promo2", "PromoInterval", "Promo2Since"]
+
+    def __init__(self, stores: pd.DataFrame) -> None:
+        super().__init__()
+        self.stores = stores[self.KEEP_COLUMNS]
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
+        X_out = X.copy()
+        X_out["Promo2"] = X.apply(
+            lambda row: self.is_promo2_at_day(*row.name), axis=1
+        )
+        return X_out
+
+    def is_promo2_at_day(self, storeId: int, date: pd.Timestamp) -> bool:
+        if storeId not in self.stores.index.get_level_values(0):
+            raise StoreNotFoundException(storeId)
+        store_data = self.stores.loc[storeId]
+        if not store_data["Promo2"]:
+            return False
+        return (
+            date.month in store_data["PromoInterval"]
+            and date > store_data["Promo2Since"]
+        )
+
+
+class DaySinceCompetitionOpenedExtractor(TransformerMixin):
+    """Calculated the number of days since the competition was opened"""
+
+    KEEP_COLUMNS = ["CompetitionOpenSince"]
+
+    def __init__(self, stores: pd.DataFrame) -> None:
+        super().__init__()
+        self.stores = stores[self.KEEP_COLUMNS]
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
+        X_out = X.copy()
+        X_out["CompetitionOpenSinceDays"] = X.apply(
+            lambda row: self.days_since_competition_opened(*row.name), axis=1
+        )
+        X_out["CompetitionOpen"] = X_out["CompetitionOpenSinceDays"] > 0
+        return X_out
+
+    def days_since_competition_opened(
+        self, storeId: int, date: pd.Timestamp
+    ) -> int:
+        if storeId not in self.stores.index.get_level_values(0):
+            raise StoreNotFoundException(storeId)
+        store_data = self.stores.loc[storeId]
+        if not store_data["CompetitionOpenSince"] or pd.isna(
+            store_data["CompetitionOpenSince"]
+        ):
+            return 0
+        return (date - store_data["CompetitionOpenSince"]).days
+
+
+class DataFrameFeatureExtractor(TransformerMixin):
+    """Looks up features in another dataframe"""
+
+    def __init__(
+        self, stores: pd.DataFrame, features: List[Text], id: Text
+    ) -> None:
+        super().__init__()
+        self.stores = stores[features]
+        self.id = id
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
+        return X.join(self.stores, on=self.id, how="left")
